@@ -1,10 +1,14 @@
 package com.vms.backend.controller;
 
+import com.vms.backend.config.SecurityConfig;
+import com.vms.backend.config.WebConfig;
 import com.vms.backend.dto.VehicleRequest;
 import com.vms.backend.dto.VehicleResponse;
 import com.vms.backend.exception.DuplicateVehicleNumberException;
 import com.vms.backend.exception.GlobalExceptionHandler;
 import com.vms.backend.exception.ResourceNotFoundException;
+import com.vms.backend.security.JwtAuthFilter;
+import com.vms.backend.security.JwtService;
 import com.vms.backend.service.VehicleService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -26,6 +30,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(VehicleController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, WebConfig.class, JwtAuthFilter.class})
 class VehicleControllerTest {
 
     @Autowired
@@ -42,6 +47,9 @@ class VehicleControllerTest {
 
     @MockitoBean
     private VehicleService vehicleService;
+
+    @MockitoBean
+    private JwtService jwtService;
 
     private static final String VALID_VEHICLE_JSON = """
             {
@@ -74,6 +82,7 @@ class VehicleControllerTest {
             when(vehicleService.createVehicle(any(VehicleRequest.class))).thenReturn(sampleResponse);
 
             mockMvc.perform(post("/api/vehicles")
+                            .with(user("testuser").roles("USER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(VALID_VEHICLE_JSON))
                     .andExpect(status().isCreated())
@@ -103,6 +112,7 @@ class VehicleControllerTest {
                     """;
 
             mockMvc.perform(post("/api/vehicles")
+                            .with(user("testuser").roles("USER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(invalidJson))
                     .andExpect(status().isBadRequest())
@@ -119,6 +129,7 @@ class VehicleControllerTest {
                     .thenThrow(DuplicateVehicleNumberException.forVehicleNumber("DHK-11-2233"));
 
             mockMvc.perform(post("/api/vehicles")
+                            .with(user("testuser").roles("USER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(VALID_VEHICLE_JSON))
                     .andExpect(status().isConflict())
@@ -126,6 +137,15 @@ class VehicleControllerTest {
                     .andExpect(jsonPath("$.error").value("Conflict"))
                     .andExpect(jsonPath("$.message").value("Vehicle already exists with vehicle number: DHK-11-2233"))
                     .andExpect(jsonPath("$.path").value("/api/vehicles"));
+        }
+
+        @Test
+        @DisplayName("POST /api/vehicles without token returns 401 Unauthorized")
+        void createVehicle_noToken_returns401() throws Exception {
+            mockMvc.perform(post("/api/vehicles")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(VALID_VEHICLE_JSON))
+                    .andExpect(status().isUnauthorized());
         }
     }
 
@@ -139,6 +159,7 @@ class VehicleControllerTest {
             when(vehicleService.getAllVehicles()).thenReturn(List.of(sampleResponse));
 
             mockMvc.perform(get("/api/vehicles")
+                            .with(user("testuser").roles("USER"))
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$", hasSize(1)))
@@ -155,11 +176,20 @@ class VehicleControllerTest {
             when(vehicleService.getAllVehicles()).thenReturn(Collections.emptyList());
 
             mockMvc.perform(get("/api/vehicles")
+                            .with(user("testuser").roles("USER"))
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$", hasSize(0)));
 
             verify(vehicleService).getAllVehicles();
+        }
+
+        @Test
+        @DisplayName("GET /api/vehicles without token returns 401 Unauthorized")
+        void getAllVehicles_noToken_returns401() throws Exception {
+            mockMvc.perform(get("/api/vehicles")
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isUnauthorized());
         }
     }
 
@@ -173,6 +203,7 @@ class VehicleControllerTest {
             when(vehicleService.getVehicleById(1L)).thenReturn(sampleResponse);
 
             mockMvc.perform(get("/api/vehicles/1")
+                            .with(user("testuser").roles("USER"))
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(1L))
@@ -193,6 +224,7 @@ class VehicleControllerTest {
                     .thenThrow(new ResourceNotFoundException("Vehicle not found with id: 99"));
 
             mockMvc.perform(get("/api/vehicles/99")
+                            .with(user("testuser").roles("USER"))
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404))
@@ -223,6 +255,7 @@ class VehicleControllerTest {
             when(vehicleService.updateVehicle(eq(1L), any(VehicleRequest.class))).thenReturn(updatedResponse);
 
             mockMvc.perform(put("/api/vehicles/1")
+                            .with(user("testuser").roles("USER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(VALID_VEHICLE_JSON))
                     .andExpect(status().isOk())
@@ -243,6 +276,7 @@ class VehicleControllerTest {
                     .thenThrow(new ResourceNotFoundException("Vehicle not found with id: 99"));
 
             mockMvc.perform(put("/api/vehicles/99")
+                            .with(user("testuser").roles("USER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(VALID_VEHICLE_JSON))
                     .andExpect(status().isNotFound())
@@ -267,6 +301,7 @@ class VehicleControllerTest {
                     """;
 
             mockMvc.perform(put("/api/vehicles/1")
+                            .with(user("testuser").roles("USER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(invalidJson))
                     .andExpect(status().isBadRequest())
@@ -283,6 +318,7 @@ class VehicleControllerTest {
                     .thenThrow(DuplicateVehicleNumberException.forVehicleNumber("DHK-11-2233"));
 
             mockMvc.perform(put("/api/vehicles/1")
+                            .with(user("testuser").roles("USER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(VALID_VEHICLE_JSON))
                     .andExpect(status().isConflict())
@@ -302,7 +338,8 @@ class VehicleControllerTest {
         void deleteVehicle_success_returns204() throws Exception {
             doNothing().when(vehicleService).deleteVehicle(1L);
 
-            mockMvc.perform(delete("/api/vehicles/1"))
+            mockMvc.perform(delete("/api/vehicles/1")
+                            .with(user("testuser").roles("USER")))
                     .andExpect(status().isNoContent());
 
             verify(vehicleService).deleteVehicle(1L);
@@ -314,7 +351,8 @@ class VehicleControllerTest {
             doThrow(new ResourceNotFoundException("Vehicle not found with id: 99"))
                     .when(vehicleService).deleteVehicle(99L);
 
-            mockMvc.perform(delete("/api/vehicles/99"))
+            mockMvc.perform(delete("/api/vehicles/99")
+                            .with(user("testuser").roles("USER")))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.error").value("Not Found"))
