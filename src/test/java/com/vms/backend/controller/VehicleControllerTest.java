@@ -2,8 +2,10 @@ package com.vms.backend.controller;
 
 import com.vms.backend.config.SecurityConfig;
 import com.vms.backend.config.WebConfig;
+import com.vms.backend.dto.PageResponse;
 import com.vms.backend.dto.VehicleRequest;
 import com.vms.backend.dto.VehicleResponse;
+import com.vms.backend.entity.VehicleStatus;
 import com.vms.backend.exception.DuplicateVehicleNumberException;
 import com.vms.backend.exception.GlobalExceptionHandler;
 import com.vms.backend.exception.ResourceNotFoundException;
@@ -23,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Collections;
 import java.util.List;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -69,7 +72,7 @@ class VehicleControllerTest {
             "Truck",
             "Volvo",
             "FH16",
-            "ACTIVE"
+            VehicleStatus.ACTIVE
     );
 
     @Nested
@@ -123,6 +126,31 @@ class VehicleControllerTest {
         }
 
         @Test
+        @DisplayName("POST /api/vehicles returns 400 Bad Request with ErrorResponse when status is invalid enum")
+        void createVehicle_invalidStatus_returns400() throws Exception {
+            String invalidStatusJson = """
+                    {
+                      "vehicleNumber": "DHK-11-2233",
+                      "company": "Acme Corp",
+                      "type": "Truck",
+                      "brand": "Volvo",
+                      "model": "FH16",
+                      "status": "INVALID_STATUS"
+                    }
+                    """;
+
+            mockMvc.perform(post("/api/vehicles")
+                            .with(user("testuser").roles("USER"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(invalidStatusJson))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.error").value("Bad Request"))
+                    .andExpect(jsonPath("$.message").value(containsString("INVALID_STATUS")))
+                    .andExpect(jsonPath("$.path").value("/api/vehicles"));
+        }
+
+        @Test
         @DisplayName("POST /api/vehicles returns 409 Conflict when duplicate vehicle number occurs")
         void createVehicle_duplicateVehicleNumber_returns409() throws Exception {
             when(vehicleService.createVehicle(any(VehicleRequest.class)))
@@ -154,34 +182,209 @@ class VehicleControllerTest {
     class ListVehiclesTests {
 
         @Test
-        @DisplayName("GET /api/vehicles returns 200 OK and list of vehicles")
-        void getAllVehicles_returnsList() throws Exception {
-            when(vehicleService.getAllVehicles()).thenReturn(List.of(sampleResponse));
+        @DisplayName("GET /api/vehicles returns 200 OK and paged response shape")
+        void getAllVehicles_returnsPagedResponse() throws Exception {
+            PageResponse<VehicleResponse> pagedResponse = new PageResponse<>(
+                    List.of(sampleResponse),
+                    0,
+                    10,
+                    1L,
+                    1
+            );
+            when(vehicleService.getVehicles(null, (String) null, null, "id", "asc", 0, 10))
+                    .thenReturn(pagedResponse);
 
             mockMvc.perform(get("/api/vehicles")
                             .with(user("testuser").roles("USER"))
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", hasSize(1)))
-                    .andExpect(jsonPath("$[0].id").value(1L))
-                    .andExpect(jsonPath("$[0].vehicleNumber").value("DHK-11-2233"))
-                    .andExpect(jsonPath("$[0].company").value("Acme Corp"));
+                    .andExpect(jsonPath("$.content", hasSize(1)))
+                    .andExpect(jsonPath("$.content[0].id").value(1L))
+                    .andExpect(jsonPath("$.content[0].vehicleNumber").value("DHK-11-2233"))
+                    .andExpect(jsonPath("$.content[0].company").value("Acme Corp"))
+                    .andExpect(jsonPath("$.content[0].status").value("ACTIVE"))
+                    .andExpect(jsonPath("$.page").value(0))
+                    .andExpect(jsonPath("$.size").value(10))
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.totalPages").value(1));
 
-            verify(vehicleService).getAllVehicles();
+            verify(vehicleService).getVehicles(null, (String) null, null, "id", "asc", 0, 10);
         }
 
         @Test
-        @DisplayName("GET /api/vehicles returns 200 OK and empty list when no vehicles exist")
-        void getAllVehicles_empty_returnsEmptyList() throws Exception {
-            when(vehicleService.getAllVehicles()).thenReturn(Collections.emptyList());
+        @DisplayName("GET /api/vehicles returns 200 OK and empty content when no vehicles exist")
+        void getAllVehicles_empty_returnsEmptyPagedResponse() throws Exception {
+            PageResponse<VehicleResponse> emptyPage = new PageResponse<>(
+                    Collections.emptyList(),
+                    0,
+                    10,
+                    0L,
+                    0
+            );
+            when(vehicleService.getVehicles(null, (String) null, null, "id", "asc", 0, 10))
+                    .thenReturn(emptyPage);
 
             mockMvc.perform(get("/api/vehicles")
                             .with(user("testuser").roles("USER"))
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", hasSize(0)));
+                    .andExpect(jsonPath("$.content", hasSize(0)))
+                    .andExpect(jsonPath("$.page").value(0))
+                    .andExpect(jsonPath("$.size").value(10))
+                    .andExpect(jsonPath("$.totalElements").value(0))
+                    .andExpect(jsonPath("$.totalPages").value(0));
 
-            verify(vehicleService).getAllVehicles();
+            verify(vehicleService).getVehicles(null, (String) null, null, "id", "asc", 0, 10);
+        }
+
+        @Test
+        @DisplayName("GET /api/vehicles with search query q calls service with search filter")
+        void getVehicles_withSearchQuery_returnsMatchingVehicles() throws Exception {
+            PageResponse<VehicleResponse> pagedResponse = new PageResponse<>(
+                    List.of(sampleResponse),
+                    0,
+                    10,
+                    1L,
+                    1
+            );
+            when(vehicleService.getVehicles("Volvo", (String) null, null, "id", "asc", 0, 10))
+                    .thenReturn(pagedResponse);
+
+            mockMvc.perform(get("/api/vehicles")
+                            .param("q", "Volvo")
+                            .with(user("testuser").roles("USER"))
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content", hasSize(1)))
+                    .andExpect(jsonPath("$.content[0].brand").value("Volvo"));
+
+            verify(vehicleService).getVehicles("Volvo", (String) null, null, "id", "asc", 0, 10);
+        }
+
+        @Test
+        @DisplayName("GET /api/vehicles with status filter returns matching vehicles")
+        void getVehicles_withStatusFilter_returnsMatchingVehicles() throws Exception {
+            PageResponse<VehicleResponse> pagedResponse = new PageResponse<>(
+                    List.of(sampleResponse),
+                    0,
+                    10,
+                    1L,
+                    1
+            );
+            when(vehicleService.getVehicles(null, "ACTIVE", null, "id", "asc", 0, 10))
+                    .thenReturn(pagedResponse);
+
+            mockMvc.perform(get("/api/vehicles")
+                            .param("status", "ACTIVE")
+                            .with(user("testuser").roles("USER"))
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].status").value("ACTIVE"));
+
+            verify(vehicleService).getVehicles(null, "ACTIVE", null, "id", "asc", 0, 10);
+        }
+
+        @Test
+        @DisplayName("GET /api/vehicles with invalid status filter returns 400 with ErrorResponse")
+        void getVehicles_withInvalidStatusFilter_returns400() throws Exception {
+            when(vehicleService.getVehicles(null, "NOT_A_STATUS", null, "id", "asc", 0, 10))
+                    .thenThrow(new IllegalArgumentException("Invalid status: 'NOT_A_STATUS'. Allowed values: ACTIVE, INACTIVE, MAINTENANCE"));
+
+            mockMvc.perform(get("/api/vehicles")
+                            .param("status", "NOT_A_STATUS")
+                            .with(user("testuser").roles("USER"))
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.error").value("Bad Request"))
+                    .andExpect(jsonPath("$.message").value(containsString("NOT_A_STATUS")))
+                    .andExpect(jsonPath("$.path").value("/api/vehicles"));
+        }
+
+        @Test
+        @DisplayName("GET /api/vehicles with type filter returns matching vehicles")
+        void getVehicles_withTypeFilter_returnsMatchingVehicles() throws Exception {
+            PageResponse<VehicleResponse> pagedResponse = new PageResponse<>(
+                    List.of(sampleResponse),
+                    0,
+                    10,
+                    1L,
+                    1
+            );
+            when(vehicleService.getVehicles(null, (String) null, "Truck", "id", "asc", 0, 10))
+                    .thenReturn(pagedResponse);
+
+            mockMvc.perform(get("/api/vehicles")
+                            .param("type", "Truck")
+                            .with(user("testuser").roles("USER"))
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].type").value("Truck"));
+
+            verify(vehicleService).getVehicles(null, (String) null, "Truck", "id", "asc", 0, 10);
+        }
+
+        @Test
+        @DisplayName("GET /api/vehicles with sorting and pagination returns properly paged and sorted results")
+        void getVehicles_withSortingAndPagination_returnsResults() throws Exception {
+            PageResponse<VehicleResponse> pagedResponse = new PageResponse<>(
+                    List.of(sampleResponse),
+                    2,
+                    5,
+                    15L,
+                    3
+            );
+            when(vehicleService.getVehicles(null, (String) null, null, "brand", "desc", 2, 5))
+                    .thenReturn(pagedResponse);
+
+            mockMvc.perform(get("/api/vehicles")
+                            .param("sortBy", "brand")
+                            .param("sortDir", "desc")
+                            .param("page", "2")
+                            .param("size", "5")
+                            .with(user("testuser").roles("USER"))
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.page").value(2))
+                    .andExpect(jsonPath("$.size").value(5))
+                    .andExpect(jsonPath("$.totalElements").value(15))
+                    .andExpect(jsonPath("$.totalPages").value(3));
+
+            verify(vehicleService).getVehicles(null, (String) null, null, "brand", "desc", 2, 5);
+        }
+
+        @Test
+        @DisplayName("GET /api/vehicles with invalid sortBy returns 400 Bad Request with ErrorResponse")
+        void getVehicles_invalidSortBy_returns400() throws Exception {
+            when(vehicleService.getVehicles(null, (String) null, null, "unsupportedField", "asc", 0, 10))
+                    .thenThrow(new IllegalArgumentException("Invalid sortBy field: 'unsupportedField'"));
+
+            mockMvc.perform(get("/api/vehicles")
+                            .param("sortBy", "unsupportedField")
+                            .with(user("testuser").roles("USER"))
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.error").value("Bad Request"))
+                    .andExpect(jsonPath("$.message").value(containsString("unsupportedField")))
+                    .andExpect(jsonPath("$.path").value("/api/vehicles"));
+        }
+
+        @Test
+        @DisplayName("GET /api/vehicles with invalid size > 100 returns 400 Bad Request with ErrorResponse")
+        void getVehicles_invalidSize_returns400() throws Exception {
+            when(vehicleService.getVehicles(null, (String) null, null, "id", "asc", 0, 101))
+                    .thenThrow(new IllegalArgumentException("Page size must be between 1 and 100"));
+
+            mockMvc.perform(get("/api/vehicles")
+                            .param("size", "101")
+                            .with(user("testuser").roles("USER"))
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.error").value("Bad Request"))
+                    .andExpect(jsonPath("$.message").value(containsString("Page size must be between 1 and 100")))
+                    .andExpect(jsonPath("$.path").value("/api/vehicles"));
         }
 
         @Test
@@ -250,7 +453,7 @@ class VehicleControllerTest {
                     "Van",
                     "Mercedes",
                     "Sprinter",
-                    "MAINTENANCE"
+                    VehicleStatus.MAINTENANCE
             );
             when(vehicleService.updateVehicle(eq(1L), any(VehicleRequest.class))).thenReturn(updatedResponse);
 
@@ -308,6 +511,31 @@ class VehicleControllerTest {
                     .andExpect(jsonPath("$.status").value(400))
                     .andExpect(jsonPath("$.error").value("Bad Request"))
                     .andExpect(jsonPath("$.message").isNotEmpty())
+                    .andExpect(jsonPath("$.path").value("/api/vehicles/1"));
+        }
+
+        @Test
+        @DisplayName("PUT /api/vehicles/{id} returns 400 Bad Request with ErrorResponse when status is invalid enum")
+        void updateVehicle_invalidStatus_returns400() throws Exception {
+            String invalidJson = """
+                    {
+                      "vehicleNumber": "DHK-11-2233",
+                      "company": "Acme Corp",
+                      "type": "Truck",
+                      "brand": "Volvo",
+                      "model": "FH16",
+                      "status": "INVALID_STATUS"
+                    }
+                    """;
+
+            mockMvc.perform(put("/api/vehicles/1")
+                            .with(user("testuser").roles("USER"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(invalidJson))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.error").value("Bad Request"))
+                    .andExpect(jsonPath("$.message").value(containsString("INVALID_STATUS")))
                     .andExpect(jsonPath("$.path").value("/api/vehicles/1"));
         }
 

@@ -1,6 +1,7 @@
 package com.vms.backend.dto;
 
 import com.vms.backend.entity.Vehicle;
+import com.vms.backend.entity.VehicleStatus;
 
 public record VehicleResponse(
         Long id,
@@ -9,7 +10,7 @@ public record VehicleResponse(
         String type,
         String brand,
         String model,
-        String status
+        VehicleStatus status
 ) {
     public static VehicleResponse fromEntity(Vehicle vehicle) {
         if (vehicle == null) {
@@ -50,7 +51,7 @@ public record VehicleResponse(
         return model;
     }
 
-    public String getStatus() {
+    public VehicleStatus getStatus() {
         return status;
     }
 }

@@ -1,5 +1,6 @@
 package com.vms.backend.dto;
 
+import com.vms.backend.entity.VehicleStatus;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -32,7 +33,7 @@ class VehicleRequestValidationTest {
                 "Truck",
                 "Volvo",
                 "FH16",
-                "ACTIVE"
+                VehicleStatus.ACTIVE
         );
 
         Set<ConstraintViolation<VehicleRequest>> violations = validator.validate(request);
@@ -49,7 +50,7 @@ class VehicleRequestValidationTest {
                 "Truck",
                 "Volvo",
                 "FH16",
-                "ACTIVE"
+                VehicleStatus.ACTIVE
         );
 
         Set<ConstraintViolation<VehicleRequest>> violations = validator.validate(request);

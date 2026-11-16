@@ -1,6 +1,8 @@
 package com.vms.backend.dto;
 
+import com.vms.backend.entity.VehicleStatus;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record VehicleRequest(
@@ -24,9 +26,8 @@ public record VehicleRequest(
         @Size(max = 100, message = "Model must not exceed 100 characters")
         String model,
 
-        @NotBlank(message = "Status is required")
-        @Size(max = 50, message = "Status must not exceed 50 characters")
-        String status
+        @NotNull(message = "Status is required")
+        VehicleStatus status
 ) {
     public String getVehicleNumber() {
         return vehicleNumber;
@@ -48,7 +49,7 @@ public record VehicleRequest(
         return model;
     }
 
-    public String getStatus() {
+    public VehicleStatus getStatus() {
         return status;
     }
 }

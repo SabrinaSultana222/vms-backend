@@ -2,6 +2,8 @@ package com.vms.backend.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -37,13 +39,14 @@ public class Vehicle {
     @Column(name = "model", nullable = false)
     private String model;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private String status;
+    private VehicleStatus status;
 
     public Vehicle() {
     }
 
-    public Vehicle(String vehicleNumber, String company, String type, String brand, String model, String status) {
+    public Vehicle(String vehicleNumber, String company, String type, String brand, String model, VehicleStatus status) {
         this.vehicleNumber = vehicleNumber;
         this.company = company;
         this.type = type;
@@ -52,7 +55,7 @@ public class Vehicle {
         this.status = status;
     }
 
-    public Vehicle(Long id, String vehicleNumber, String company, String type, String brand, String model, String status) {
+    public Vehicle(Long id, String vehicleNumber, String company, String type, String brand, String model, VehicleStatus status) {
         this.id = id;
         this.vehicleNumber = vehicleNumber;
         this.company = company;
@@ -110,11 +113,11 @@ public class Vehicle {
         this.model = model;
     }
 
-    public String getStatus() {
+    public VehicleStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(VehicleStatus status) {
         this.status = status;
     }
 
@@ -141,7 +144,7 @@ public class Vehicle {
                 ", type='" + type + '\'' +
                 ", brand='" + brand + '\'' +
                 ", model='" + model + '\'' +
-                ", status='" + status + '\'' +
+                ", status=" + status +
                 '}';
     }
 }

@@ -1,5 +1,6 @@
 package com.vms.backend.controller;
 
+import com.vms.backend.dto.PageResponse;
 import com.vms.backend.dto.VehicleRequest;
 import com.vms.backend.dto.VehicleResponse;
 import com.vms.backend.service.VehicleService;
@@ -13,9 +14,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/vehicles")
@@ -34,9 +34,17 @@ public class VehicleController {
     }
 
     @GetMapping
-    public ResponseEntity<List<VehicleResponse>> getAllVehicles() {
-        List<VehicleResponse> vehicles = vehicleService.getAllVehicles();
-        return ResponseEntity.ok(vehicles);
+    public ResponseEntity<PageResponse<VehicleResponse>> getAllVehicles(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String type,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        PageResponse<VehicleResponse> response = vehicleService.getVehicles(q, status, type, sortBy, sortDir, page, size);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")
